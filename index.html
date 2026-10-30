@@ -34,6 +34,8 @@
   .resHead { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; }
   .tag { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:99px; background:var(--none); color:#fff; }
   .ok .tag { background:var(--ok); } .part .tag { background:var(--part); color:#1b1f24; }
+  .partial { color:var(--part); font-size:.85rem; font-weight:600; }
+  .left { color:var(--muted); white-space:nowrap; }
   .hits { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
   .hit { display:flex; gap:8px; align-items:center; text-align:left; font:inherit; font-size:.9rem; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px 10px 4px 4px; cursor:pointer; }
   .hit img { width:36px; border-radius:4px; }
@@ -216,12 +218,19 @@
     const byId = new Map(cards.map(c => [c.id, c]));
     const PICKS_KEY = 'rb.picks:' + location.pathname;
     const picks = new Map(); // id -> qty
+    const wants = new Map(); // id -> how many their want list asked for, when that's more than is in stock
     try {
       for (const [id, q] of JSON.parse(localStorage.getItem(PICKS_KEY)) || []) {
         const c = byId.get(+id);
-        if (c && q > 0) picks.set(c.id, Math.min(q, c.qty)); // stock may have dropped since they picked
+        if (c && q > 0) {
+          picks.set(c.id, Math.min(q, c.qty));
+          if (q > c.qty) wants.set(c.id, q); // stock dropped since they picked
+        }
       }
+      for (const [id, w] of JSON.parse(localStorage.getItem(PICKS_KEY + ':wants')) || []) if (picks.has(+id)) wants.set(+id, Math.max(w, wants.get(+id) || 0));
     } catch {}
+    // Only partly filled when they asked for more than there is and have everything that's left
+    const shortBy = id => (wants.get(id) > (picks.get(id) || 0) && picks.get(id) === byId.get(id).qty ? wants.get(id) : 0);
 
     const pickCtl = c => {
       const q = picks.get(c.id) || 0;
@@ -229,15 +238,21 @@
         ? `<span class="stepper"><button data-pick="-1" aria-label="One less">−</button><span>${q}</span><button data-pick="1" aria-label="One more"${q >= c.qty ? ' disabled title="That\'s all in stock"' : ''}>+</button></span>`
         : '<button class="addBtn" data-pick="1">Add</button>';
     };
-    const slot = c => `<span class="pickSlot" data-id="${c.id}">${pickCtl(c)}</span>`;
+    // want: the quantity from their want list, so Add puts in that many (or all that's left)
+    const slot = (c, want) => `<span class="pickSlot" data-id="${c.id}"${want > 1 ? ` data-want="${want}"` : ''}>${pickCtl(c)}</span>`;
     const pickLine = (c, q) => `${q} x ${c.name}${c.num ? ` | ${c.set} #${c.num}` : ''}`;
 
-    function setPick(id, q) {
+    // want: how many they asked for (kept to show "partly available"); leave it out for a manual change
+    function setPick(id, q, want) {
       const c = byId.get(+id);
       if (!c) return;
       q = Math.max(0, Math.min(c.qty, q));
       q ? picks.set(c.id, q) : picks.delete(c.id);
-      try { localStorage.setItem(PICKS_KEY, JSON.stringify([...picks])); } catch {}
+      if (want > c.qty && q) wants.set(c.id, want); else wants.delete(c.id);
+      try {
+        localStorage.setItem(PICKS_KEY, JSON.stringify([...picks]));
+        localStorage.setItem(PICKS_KEY + ':wants', JSON.stringify([...wants]));
+      } catch {}
       refreshPicks();
     }
 
@@ -255,7 +270,7 @@
       $('pickList').innerHTML = list.length ? list.map(({ c, q }) => `
         <div class="pickRow">
           <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" onerror="this.style.visibility='hidden'"></button>
-          <span class="pname"><strong>${esc(c.name)}</strong><br><span class="muted small">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''} · ${c.qty} in stock</span></span>
+          <span class="pname"><strong>${esc(c.name)}</strong><br><span class="muted small">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''} · ${c.qty} in stock</span>${shortBy(c.id) ? `<br><span class="partial">Partly available: wanted ${shortBy(c.id)}, all ${c.qty} added</span>` : ''}</span>
           ${slot(c)}
           <span class="pprice">${c.price != null ? money(c.price * q) : ''}</span>
         </div>`).join('') + (priced ? `<div class="pickTotal">Total <strong>${money(total)}</strong></div>` : '')
@@ -291,20 +306,21 @@
         found.forEach(c => wanted.add(c.id));
         const status = !have ? 'none' : have >= qty ? 'ok' : 'part';
         status === 'ok' ? full++ : status === 'part' ? part++ : none++;
-        if (found.length === 1) quickAdds.push({ id: found[0].id, qty: Math.min(qty, found[0].qty) });
+        if (found.length === 1) quickAdds.push({ id: found[0].id, qty });
         else if (found.length > 1) several++;
-        const label = { ok: 'In stock', part: `Only ${have}`, none: 'Out of stock' }[status];
+        const label = { ok: 'In stock', part: 'Partly available', none: 'Out of stock' }[status];
         const printings = found.map(c => `
           <div class="hit">
             <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>
-            <span><strong>${c.qty} ×</strong> ${esc(c.name)}<br><span class="muted">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''}${c.price != null ? ' · ' + money(c.price) : ''}</span></span>
-            ${slot(c)}
+            <span>${esc(c.name)} <span class="left">(${c.qty} left)</span><br><span class="muted">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''}${c.price != null ? ' · ' + money(c.price) : ''}</span></span>
+            ${slot(c, qty)}
           </div>`).join('');
         return `
           <div class="res ${status}">
             <div class="resHead">
               <span class="tag">${label}</span>
               <span><strong>${qty} ×</strong> ${esc(name)}</span>
+              ${status === 'part' ? `<span class="partial">· only ${have} left, so you'd get ${have} of ${qty}</span>` : ''}
               ${loose && found.length ? '<span class="muted">(closest matches)</span>' : ''}
               ${found.length > 1 ? '<span class="muted">· pick the version you want</span>' : ''}
               ${!found.length ? '<span class="muted">· this card is out of stock</span>' : ''}
@@ -415,7 +431,7 @@
     $('check').addEventListener('click', check);
     $('wantText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) check(); });
     $('addAll').addEventListener('click', () => {
-      for (const { id, qty } of quickAdds) setPick(id, Math.max(picks.get(id) || 0, qty));
+      for (const { id, qty } of quickAdds) setPick(id, Math.max(picks.get(id) || 0, qty), qty);
       $('addAll').textContent = 'Added ✓';
       setTimeout(() => ($('addAll').textContent = 'Add these to my picks'), 2000);
     });
@@ -423,8 +439,10 @@
     document.addEventListener('click', e => {
       const b = e.target.closest('[data-pick]');
       if (!b) return;
-      const id = +b.closest('.pickSlot').dataset.id;
-      setPick(id, (picks.get(id) || 0) + +b.dataset.pick);
+      const s = b.closest('.pickSlot'), id = +s.dataset.id, want = +s.dataset.want;
+      // Add from a want-list result puts in the amount they asked for (capped at what's left); − and + step by one
+      if (!picks.has(id) && want) setPick(id, want, want);
+      else setPick(id, (picks.get(id) || 0) + +b.dataset.pick);
     });
     const closeDrawer = () => $('drawer').classList.remove('open');
     $('pickOpen').addEventListener('click', () => $('drawer').classList.add('open'));
