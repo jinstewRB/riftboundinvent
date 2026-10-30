@@ -53,10 +53,33 @@
   .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
   #count { margin:6px 0 12px; }
   #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:14px; }
-  .tile { display:flex; flex-direction:column; gap:3px; text-align:left; font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; cursor:pointer; }
-  .tile:hover { background:var(--hover); }
+  .tile { display:flex; flex-direction:column; gap:3px; color:var(--ink); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:8px; }
   .tile.wanted { border-color:var(--ok); box-shadow:0 0 0 2px var(--ok); }
-  .pic { position:relative; display:block; aspect-ratio:5/7; background:var(--line); border-radius:6px; overflow:hidden; margin-bottom:4px; }
+  .tile.picked { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .pic { position:relative; display:block; width:100%; aspect-ratio:5/7; background:var(--line); border:0; padding:0; border-radius:6px; overflow:hidden; margin-bottom:4px; cursor:zoom-in; }
+  .badge.plain { color:var(--muted); border-color:var(--line); }
+  .tfoot { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:auto; padding-top:4px; }
+  .addBtn { font:inherit; font-size:.85rem; font-weight:600; border:1px solid var(--accent); background:transparent; color:var(--accent); border-radius:8px; padding:3px 12px; cursor:pointer; }
+  .addBtn:hover { background:var(--accent); color:var(--accent-ink); }
+  .stepper { display:inline-flex; align-items:center; border:1px solid var(--accent); border-radius:8px; overflow:hidden; }
+  .stepper button { font:inherit; font-weight:700; width:28px; height:28px; border:0; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+  .stepper button:disabled { opacity:.35; cursor:not-allowed; }
+  .stepper span { min-width:28px; text-align:center; font-weight:700; }
+  .open { border:0; padding:0; background:none; cursor:zoom-in; flex:none; }
+  .hit { cursor:default; }
+  .howto { padding:12px 16px; font-size:.95rem; }
+  body.hasBar { padding-bottom:72px; }
+  #pickBar { position:fixed; left:0; right:0; bottom:0; z-index:8; display:flex; justify-content:center; padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background:linear-gradient(transparent, var(--bg) 35%); pointer-events:none; }
+  #pickOpen { pointer-events:auto; font:inherit; display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; background:var(--accent); color:var(--accent-ink); border:0; border-radius:99px; padding:10px 20px; cursor:pointer; box-shadow:0 6px 24px rgba(0,0,0,.35); }
+  #pickOpen .go { font-weight:600; text-decoration:underline; }
+  #drawer { position:fixed; inset:0; z-index:9; background:rgba(0,0,0,.6); display:flex; align-items:flex-end; justify-content:center; }
+  .drawerBox { background:var(--panel); border:1px solid var(--line); border-radius:14px 14px 0 0; width:min(640px, 100%); max-height:85vh; overflow-y:auto; padding:16px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .pickRow { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .pickRow img { width:42px; border-radius:4px; display:block; }
+  .pname { flex:1; min-width:0; }
+  .pprice { min-width:70px; text-align:right; font-weight:700; }
+  .pickTotal { text-align:right; padding:10px 0 2px; }
+  .lbPick { margin-top:12px; }
   .pic img { width:100%; height:100%; object-fit:cover; display:block; }
   .qty { position:absolute; right:6px; bottom:6px; background:rgba(0,0,0,.75); color:#fff; font-weight:700; border-radius:6px; padding:1px 7px; }
   .tname { font-weight:600; }
@@ -91,8 +114,12 @@
     <div class="row"><button class="btn primary" id="check">Check</button><span id="resSummary"></span></div>
     <div id="results" hidden>
       <div id="resList"></div>
-      <div class="row"><button class="btn" id="copyReq">Copy what you have for me</button><span class="muted small">to paste back in a message</span></div>
+      <div class="row"><button class="btn" id="addAll">Add these to my picks</button><span class="muted small" id="addAllNote"></span></div>
     </div>
+  </section>
+
+  <section class="panel howto">
+    <strong>Want some?</strong> Press <strong>Add</strong> on the cards you'd like (search to see every version), then open your picks at the bottom and <strong>Copy list</strong> to send it (see above for how to reach me).
   </section>
 
   <section class="panel">
@@ -113,6 +140,20 @@
     <div id="grid"></div>
   </section>
   
+</div>
+<div id="pickBar" hidden><button id="pickOpen">🛒 <strong id="pickCount"></strong> <span id="pickTotal"></span><span class="go">View &amp; copy list</span></button></div>
+<div id="drawer" hidden>
+  <div class="drawerBox" role="dialog" aria-modal="true" aria-labelledby="pickTitle">
+    <h2 id="pickTitle">Your picks</h2>
+    <div id="pickList"></div>
+    <div class="row">
+      <button class="btn primary" id="copyPicks">Copy list</button>
+      <button class="btn" id="clearPicks">Clear</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="closeDrawer">Close</button>
+    </div>
+    <p class="muted small">Copy the list and send it in a message. Each line names the exact version, so there's no mix-up. Your picks stay saved on this device.</p>
+  </div>
 </div>
 <div id="lightbox" hidden><div class="lbBox"><img id="lbImg" alt=""><div id="lbInfo"></div></div></div>
 <script>(function sharePage(D) {
@@ -146,15 +187,78 @@
       return { found, loose: true };
     }
 
+    // ---------- Picks: the cards they want, kept on their device ----------
+    // Copied as "2 x Jinx, Rebel (Alternate Art) | Origins #301a/298". The set and number name one exact
+    // printing, so the list pastes straight into the Riftbound pricer without choosing versions.
+    const byId = new Map(cards.map(c => [c.id, c]));
+    const PICKS_KEY = 'rb.picks:' + location.pathname;
+    const picks = new Map(); // id -> qty
+    try {
+      for (const [id, q] of JSON.parse(localStorage.getItem(PICKS_KEY)) || []) {
+        const c = byId.get(+id);
+        if (c && q > 0) picks.set(c.id, Math.min(q, c.qty)); // stock may have dropped since they picked
+      }
+    } catch {}
+
+    const pickCtl = c => {
+      const q = picks.get(c.id) || 0;
+      return q
+        ? `<span class="stepper"><button data-pick="-1" aria-label="One less">−</button><span>${q}</span><button data-pick="1" aria-label="One more"${q >= c.qty ? ' disabled title="That\'s all in stock"' : ''}>+</button></span>`
+        : '<button class="addBtn" data-pick="1">Add</button>';
+    };
+    const slot = c => `<span class="pickSlot" data-id="${c.id}">${pickCtl(c)}</span>`;
+    const pickLine = (c, q) => `${q} x ${c.name}${c.num ? ` | ${c.set} #${c.num}` : ''}`;
+
+    function setPick(id, q) {
+      const c = byId.get(+id);
+      if (!c) return;
+      q = Math.max(0, Math.min(c.qty, q));
+      q ? picks.set(c.id, q) : picks.delete(c.id);
+      try { localStorage.setItem(PICKS_KEY, JSON.stringify([...picks])); } catch {}
+      refreshPicks();
+    }
+
+    function refreshPicks() {
+      for (const el of document.querySelectorAll('.pickSlot')) el.innerHTML = pickCtl(byId.get(+el.dataset.id));
+      for (const el of document.querySelectorAll('#grid .tile')) el.classList.toggle('picked', picks.has(+el.querySelector('.pickSlot').dataset.id));
+      const list = [...picks].map(([id, q]) => ({ c: byId.get(id), q }));
+      const copies = list.reduce((s, p) => s + p.q, 0);
+      const total = list.reduce((s, p) => s + (p.c.price || 0) * p.q, 0);
+      const priced = D.showPrices && list.some(p => p.c.price != null);
+      $('pickCount').textContent = `${copies} card${copies === 1 ? '' : 's'} picked`;
+      $('pickTotal').textContent = priced ? `· ${money(total)}` : '';
+      $('pickBar').hidden = !copies;
+      document.body.classList.toggle('hasBar', !!copies);
+      $('pickList').innerHTML = list.length ? list.map(({ c, q }) => `
+        <div class="pickRow">
+          <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" onerror="this.style.visibility='hidden'"></button>
+          <span class="pname"><strong>${esc(c.name)}</strong><br><span class="muted small">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''} · ${c.qty} in stock</span></span>
+          ${slot(c)}
+          <span class="pprice">${c.price != null ? money(c.price * q) : ''}</span>
+        </div>`).join('') + (priced ? `<div class="pickTotal">Total <strong>${money(total)}</strong></div>` : '')
+        : '<div class="empty">Nothing picked yet.</div>';
+      if (!copies) $('drawer').hidden = true;
+    }
+
+    async function copyText(t, btn, label) {
+      try { await navigator.clipboard.writeText(t); } catch {
+        const ta = Object.assign(document.createElement('textarea'), { value: t });
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      btn.textContent = 'Copied ✓';
+      setTimeout(() => (btn.textContent = label), 2000);
+    }
+
+    // ---------- Want list ----------
     let wanted = null; // productIds from the last check, for "only show my list"
-    let requestLines = [];
+    let quickAdds = []; // lines that matched exactly one printing: [{ id, qty }]
 
     function check() {
       const lines = $('wantText').value.split('\n').map(l => l.trim()).filter(Boolean);
       wanted = new Set();
-      requestLines = [];
+      quickAdds = [];
       if (!lines.length) { $('results').hidden = true; wanted = null; $('onlyMine').closest('label').hidden = true; renderGrid(); return; }
-      let full = 0, part = 0, none = 0;
+      let full = 0, part = 0, none = 0, several = 0;
       const rows = lines.map(line => {
         const { qty, name } = parseLine(line);
         const { found, loose } = findCards(name);
@@ -162,19 +266,23 @@
         found.forEach(c => wanted.add(c.id));
         const status = !have ? 'none' : have >= qty ? 'ok' : 'part';
         status === 'ok' ? full++ : status === 'part' ? part++ : none++;
-        if (have) requestLines.push(`${Math.min(qty, have)} x ${loose && found.length === 1 ? found[0].name : name}`);
-        const label = { ok: 'Have it', part: `Only ${have}`, none: 'Not in stock' }[status];
+        if (found.length === 1) quickAdds.push({ id: found[0].id, qty: Math.min(qty, found[0].qty) });
+        else if (found.length > 1) several++;
+        const label = { ok: 'Have it', part: `Only ${have}`, none: 'Out of stock' }[status];
         const printings = found.map(c => `
-          <button class="hit" data-id="${c.id}">
-            <img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <div class="hit">
+            <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>
             <span><strong>${c.qty} ×</strong> ${esc(c.name)}<br><span class="muted">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''}${c.price != null ? ' · ' + money(c.price) : ''}</span></span>
-          </button>`).join('');
+            ${slot(c)}
+          </div>`).join('');
         return `
           <div class="res ${status}">
             <div class="resHead">
               <span class="tag">${label}</span>
               <span><strong>${qty} ×</strong> ${esc(name)}</span>
               ${loose && found.length ? '<span class="muted">(closest matches)</span>' : ''}
+              ${found.length > 1 ? '<span class="muted">· pick the version you want</span>' : ''}
+              ${!found.length ? '<span class="muted">· this card is out of stock</span>' : ''}
             </div>
             ${printings ? `<div class="hits">${printings}</div>` : ''}
           </div>`;
@@ -182,10 +290,13 @@
       $('resSummary').innerHTML = [
         full && `<span class="ok">${full} available</span>`,
         part && `<span class="part">${part} partly</span>`,
-        none && `<span class="none">${none} not in stock</span>`,
+        none && `<span class="none">${none} out of stock</span>`,
       ].filter(Boolean).join(' · ');
       $('resList').innerHTML = rows.join('');
-      $('copyReq').hidden = !requestLines.length;
+      $('addAll').hidden = !quickAdds.length;
+      $('addAllNote').textContent = quickAdds.length
+        ? (several ? `Adds the ${quickAdds.length} with only one version; pick versions for the other ${several} above.` : 'Adds them all to your picks.')
+        : several ? 'These have more than one version. Click Add on the ones you want.' : '';
       $('results').hidden = false;
       $('onlyMine').closest('label').hidden = !wanted.size;
       renderGrid();
@@ -248,14 +359,17 @@
       const shown = (activeSet === 'all' ? filtered : filtered.filter(c => c.set === activeSet)).sort(SORTS[sortBy]);
       const copies = shown.reduce((s, c) => s + c.qty, 0);
       $('count').textContent = `${shown.length} card${shown.length === 1 ? '' : 's'} · ${copies} cop${copies === 1 ? 'y' : 'ies'}`;
+      // Nothing at all by that name means it's out of stock (only in-stock cards are on this page)
+      const outOfStock = text && !cards.some(c => `${c.name} ${c.set} ${c.num}`.toLowerCase().includes(text));
       $('grid').innerHTML = shown.length ? shown.map(c => `
-        <button class="tile${wanted && wanted.has(c.id) ? ' wanted' : ''}" data-id="${c.id}">
-          <span class="pic"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span class="qty">×${c.qty}</span></span>
+        <div class="tile${wanted && wanted.has(c.id) ? ' wanted' : ''}${picks.has(c.id) ? ' picked' : ''}">
+          <button class="pic" data-open="${c.id}" aria-label="Show ${esc(c.name)} larger"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span class="qty">×${c.qty}</span></button>
           <span class="tname">${esc(c.base)}</span>
-          ${c.variant !== 'Standard' ? `<span class="badge">${esc(c.variant)}</span>` : ''}
+          <span class="badge${c.variant === 'Standard' ? ' plain' : ''}">${esc(c.variant)}</span>
           <span class="muted small">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''} · ${esc(c.rarity || '')}</span>
-          ${c.price != null ? `<span class="price">${money(c.price)}</span>` : ''}
-        </button>`).join('') : '<div class="empty">No cards match.</div>';
+          <span class="tfoot">${c.price != null ? `<span class="price">${money(c.price)}</span>` : '<span></span>'}${slot(c)}</span>
+        </div>`).join('')
+        : `<div class="empty">${outOfStock ? `Sorry, “${esc(text)}” is out of stock.` : 'No cards match these filters.'}</div>`;
     }
 
     // ---------- Big picture ----------
@@ -267,21 +381,41 @@
         <strong>${esc(c.name)}</strong>
         <div class="muted">${esc(c.set)}${c.num ? ' · #' + esc(c.num) : ''} · ${esc(c.rarity || '')}</div>
         <div class="muted">${esc(VALUES.domain(c).join(', '))} · ${esc(VALUES.type(c).join(', '))}</div>
-        <div class="lbQty">${c.qty} in stock${c.price != null ? ` · ${money(c.price)} each` : ''}</div>`;
+        <div class="lbQty">${c.qty} in stock${c.price != null ? ` · ${money(c.price)} each` : ''}</div>
+        <div class="lbPick">${slot(c)}</div>`;
       $('lightbox').hidden = false;
     }
 
     // ---------- Events ----------
     $('check').addEventListener('click', check);
     $('wantText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) check(); });
-    $('copyReq').addEventListener('click', async () => {
-      const t = requestLines.join('\n');
-      try { await navigator.clipboard.writeText(t); } catch {
-        const ta = Object.assign(document.createElement('textarea'), { value: t });
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    $('addAll').addEventListener('click', () => {
+      for (const { id, qty } of quickAdds) setPick(id, Math.max(picks.get(id) || 0, qty));
+      $('addAll').textContent = 'Added ✓';
+      setTimeout(() => ($('addAll').textContent = 'Add these to my picks'), 2000);
+    });
+    // Add / − / + anywhere on the page
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-pick]');
+      if (!b) return;
+      const id = +b.closest('.pickSlot').dataset.id;
+      setPick(id, (picks.get(id) || 0) + +b.dataset.pick);
+    });
+    $('pickOpen').addEventListener('click', () => { $('drawer').hidden = false; });
+    $('closeDrawer').addEventListener('click', () => { $('drawer').hidden = true; });
+    $('drawer').addEventListener('click', e => { if (e.target === $('drawer')) $('drawer').hidden = true; });
+    $('copyPicks').addEventListener('click', () => copyText([...picks].map(([id, q]) => pickLine(byId.get(id), q)).join('\n'), $('copyPicks'), 'Copy list'));
+    $('clearPicks').addEventListener('click', e => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { // two clicks, so a stray tap can't wipe the list
+        b.dataset.armed = '1'; b.textContent = 'Clear all?';
+        setTimeout(() => { delete b.dataset.armed; b.textContent = 'Clear'; }, 3000);
+        return;
       }
-      $('copyReq').textContent = 'Copied ✓';
-      setTimeout(() => ($('copyReq').textContent = 'Copy what you have for me'), 2000);
+      delete b.dataset.armed; b.textContent = 'Clear';
+      picks.clear();
+      try { localStorage.removeItem(PICKS_KEY); } catch {}
+      refreshPicks(); renderGrid();
     });
     $('search').addEventListener('input', e => { text = e.target.value.trim().toLowerCase(); renderGrid(); });
     $('sort').addEventListener('change', e => { sortBy = e.target.value; renderGrid(); });
@@ -303,13 +437,14 @@
       if (t) { activeSet = t.dataset.set; renderGrid(); }
     });
     document.addEventListener('click', e => {
-      const t = e.target.closest('.tile, .hit');
-      if (t) openCard(t.dataset.id);
+      const t = e.target.closest('[data-open]');
+      if (t) openCard(t.dataset.open);
     });
-    $('lightbox').addEventListener('click', () => { $('lightbox').hidden = true; });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').hidden = true; });
+    $('lightbox').addEventListener('click', e => { if (!e.target.closest('.pickSlot')) $('lightbox').hidden = true; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') $('lightbox').hidden = $('drawer').hidden = true; });
     if (!D.showPrices) $('sort').querySelectorAll('[value^="price"]').forEach(o => o.remove());
     renderGrid();
+    refreshPicks();
 
     // ---------- Who's viewing (Supabase presence) ----------
     // Each visitor gets a random "Anonymous <animal>" kept on their device. Nothing else is shared.
