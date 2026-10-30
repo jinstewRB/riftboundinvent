@@ -73,6 +73,8 @@
   .hit { cursor:default; }
   .howto { padding:12px 16px; font-size:.95rem; }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .confetti { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:30; }
+  .copyNote { margin-top:12px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid var(--accent); font-size:.92rem; }
   .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
   .suggest { font:inherit; font-weight:700; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .resClose { margin-left:auto; border:0; background:none; color:var(--muted); font-size:1.2rem; line-height:1; padding:2px 6px; cursor:pointer; }
@@ -149,11 +151,11 @@
 <div class="layout">
 <main>
   <section class="panel howto">
-    <strong>Want some cards?</strong> Press <strong>Add</strong> on the cards you'd like after either checking for availability in the box here or searching below. They collect in <strong>Your picks</strong><span class="onWide"> on the right</span><span class="onNarrow"> (the button at the bottom)</span>, where you can change them and copy as a list to send to me in discord!
+    <strong>Want some cards?</strong> Press <strong>Add</strong> on the cards you'd like by checking your wishlist for availability in the box below or searching for cards individually. They collect in <strong>Your picks</strong><span class="onWide"> on the right</span><span class="onNarrow"> (the button at the bottom)</span>, where you can change them and copy as a list to send to me in discord!
   </section>
 
   <section class="panel">
-    <h2>Check your want list</h2>
+    <h2>Check your wishlist</h2>
     <div class="muted small">Paste the cards you're after, one per line (e.g. "3 x Jinx, Rebel" or just "Jinx, Rebel"), to see which ones are here.</div>
     <div class="row"><textarea id="wantText" placeholder="2 x Jinx, Rebel&#10;Sabotage&#10;Jinx, Demolitionist (Alternate Art)"></textarea></div>
     <div class="row"><button class="btn primary" id="check">Check</button><span id="resSummary"></span></div>
@@ -167,7 +169,7 @@
     <div class="tabs" id="tabs" role="tablist" aria-label="Sets"></div>
     <div class="tools">
       <input type="search" id="search" placeholder="Search cards…" aria-label="Search cards">
-      <label class="check" hidden><input type="checkbox" id="onlyMine"> Only my want list</label>
+      <label class="check" hidden><input type="checkbox" id="onlyMine"> Only my wishlist</label>
       <select id="sort" aria-label="Sort by">
         <option value="number">Set &amp; number</option>
         <option value="name">Name (A–Z)</option>
@@ -193,6 +195,7 @@
       <span style="flex:1"></span>
       <button class="btn onNarrow" id="closeDrawer">Close</button>
     </div>
+    <div class="copyNote" id="copyNote" role="status" hidden>🎉 <strong>List copied!</strong> Now send it to <strong>Jinstew</strong> in a Discord DM for further details.</div>
     <p class="muted small">Copy the list and send it to me in a message! I'll price it for you and we can discuss shipping/pickup.</p>
   </div>
 </aside>
@@ -557,7 +560,46 @@
     $('pickOpen').addEventListener('click', () => $('drawer').classList.add('open'));
     $('closeDrawer').addEventListener('click', closeDrawer);
     $('drawer').addEventListener('click', e => { if (e.target === $('drawer')) closeDrawer(); });
-    $('copyPicks').addEventListener('click', () => copyText([...picks].map(([id, q]) => pickLine(byId.get(id), q)).join('\n'), $('copyPicks'), 'Copy list'));
+    let noteTimer;
+    $('copyPicks').addEventListener('click', async () => {
+      await copyText([...picks].map(([id, q]) => pickLine(byId.get(id), q)).join('\n'), $('copyPicks'), 'Copy list');
+      confetti($('copyPicks'));
+      // Reminder of where to send it, under the buttons for a while
+      $('copyNote').hidden = false;
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => ($('copyNote').hidden = true), 12000);
+    });
+
+    // A small burst of confetti from a button (skipped for people who've asked their device for less motion)
+    function confetti(fromEl) {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const r = fromEl.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const c = Object.assign(document.createElement('canvas'), { className: 'confetti', width: innerWidth * dpr, height: innerHeight * dpr });
+      document.body.appendChild(c);
+      const g = c.getContext('2d');
+      g.scale(dpr, dpr);
+      const COLORS = ['#748ffc', '#40c057', '#fab005', '#fa5252', '#be4bdb', '#22b8cf', '#ff922b'];
+      const bits = Array.from({ length: 70 }, () => ({
+        x: r.left + r.width / 2, y: r.top + r.height / 2,
+        vx: (Math.random() - 0.5) * 9, vy: -4 - Math.random() * 7,
+        size: 5 + Math.random() * 5, rot: Math.random() * 6.3, spin: (Math.random() - 0.5) * 0.4,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      }));
+      const start = performance.now(), LIFE = 1600;
+      const frame = now => {
+        const t = now - start;
+        g.clearRect(0, 0, innerWidth, innerHeight);
+        g.globalAlpha = Math.max(0, 1 - t / LIFE);
+        for (const b of bits) {
+          b.vy += 0.28; b.vx *= 0.985; b.x += b.vx; b.y += b.vy; b.rot += b.spin;
+          g.save(); g.translate(b.x, b.y); g.rotate(b.rot);
+          g.fillStyle = b.color; g.fillRect(-b.size / 2, -b.size / 4, b.size, b.size / 2);
+          g.restore();
+        }
+        if (t < LIFE) requestAnimationFrame(frame); else c.remove();
+      };
+      requestAnimationFrame(frame);
+    }
     $('clearPicks').addEventListener('click', e => {
       const b = e.currentTarget;
       if (!b.dataset.armed) { // two clicks, so a stray tap can't wipe the list
