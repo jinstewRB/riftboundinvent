@@ -72,6 +72,8 @@
   .hit { cursor:default; }
   .howto { padding:12px 16px; font-size:.95rem; }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
+  .suggest { font:inherit; font-weight:700; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .resClose { margin-left:auto; border:0; background:none; color:var(--muted); font-size:1.2rem; line-height:1; padding:2px 6px; cursor:pointer; }
   .resClose:hover { color:var(--ink); }
   .pickToast { margin-top:10px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--ok); border-radius:10px; padding:10px 14px; box-shadow:0 8px 24px rgba(0,0,0,.3); cursor:pointer; font-size:.92rem;
@@ -309,19 +311,46 @@
 
     function check() {
       const lines = $('wantText').value.split('\n').map(l => l.trim()).filter(Boolean);
-      wantRows = lines.map(line => {
-        const { qty, name } = parseLine(line);
-        const { found, loose } = findCards(name);
-        const have = found.reduce((s, c) => s + c.qty, 0);
-        // multi: had several versions to choose from, so it's never added in bulk
-        return { qty, name, found, loose, have, multi: found.length > 1, status: !have ? 'none' : have >= qty ? 'ok' : 'part' };
-      });
+      wantRows = lines.map(line => { const { qty, name } = parseLine(line); return makeRow(qty, name); });
       renderResults();
     }
 
-    function renderResults() {
-      // Once every card that was available has been added, clear the box (out-of-stock lines included)
-      if (!wantRows.some(r => r.found.length)) wantRows = [];
+    function makeRow(qty, name) {
+      const { found, loose } = findCards(name);
+      const have = found.reduce((s, c) => s + c.qty, 0);
+      // multi: had several versions to choose from, so it's never added in bulk
+      return { qty, name, found, loose, have, multi: found.length > 1, status: !have ? 'none' : have >= qty ? 'ok' : 'part', suggest: have ? null : closestName(name) };
+    }
+
+    // For a name with no match: the in-stock card name that's closest in spelling, if one is close enough
+    function closestName(name) {
+      const q = stripParens(norm(name));
+      if (q.length < 3) return null;
+      const dist = (a, b) => {
+        const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+        for (let i = 1; i <= a.length; i++) {
+          let prev = d[0]; d[0] = i;
+          for (let j = 1; j <= b.length; j++) {
+            const t = d[j];
+            d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+            prev = t;
+          }
+        }
+        return d[b.length];
+      };
+      let best = null, bestD = Infinity;
+      for (const base of new Set(cards.map(c => c.base))) {
+        // Compare with the whole name and with just the part before the comma ("Jinx" in "Jinx, Rebel")
+        const d = Math.min(dist(q, norm(base)), dist(q, norm(base.split(',')[0])));
+        if (d < bestD) { bestD = d; best = base; }
+      }
+      return bestD <= Math.max(2, Math.floor(q.length * 0.3)) ? best : null;
+    }
+
+    // afterAdd: once every card that was available has been added, clear the box (unavailable lines included,
+    // unless one still has a "Did you mean …?" to try)
+    function renderResults(afterAdd) {
+      if (afterAdd && !wantRows.some(r => r.found.length || r.suggest)) wantRows = [];
       wanted = wantRows.length ? new Set(wantRows.flatMap(r => r.found.map(c => c.id))) : null;
       $('results').hidden = !wantRows.length;
       $('onlyMine').closest('label').hidden = !wanted || !wanted.size;
@@ -331,10 +360,10 @@
       $('resSummary').innerHTML = [
         count('ok') && `<span class="ok">${count('ok')} available</span>`,
         count('part') && `<span class="part">${count('part')} partly</span>`,
-        count('none') && `<span class="none">${count('none')} out of stock</span>`,
+        count('none') && `<span class="none">${count('none')} unavailable</span>`,
       ].filter(Boolean).join(' · ');
       $('resList').innerHTML = wantRows.map((r, i) => {
-        const label = { ok: 'In stock', part: 'Partly available', none: 'Out of stock' }[r.status];
+        const label = { ok: 'In stock', part: 'Partly available', none: 'Unavailable' }[r.status];
         const printings = r.found.map(c => `
           <div class="hit" data-row="${i}">
             <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>
@@ -349,9 +378,10 @@
               ${r.status === 'part' ? `<span class="partial">· only ${r.have} left, so you'd get ${r.have} of ${r.qty}</span>` : ''}
               ${r.loose && r.found.length ? '<span class="muted">(closest matches)</span>' : ''}
               ${r.multi ? '<span class="muted">· pick the version you want</span>' : ''}
-              ${!r.found.length ? '<span class="muted">· this card is out of stock</span>' : ''}
               <button class="resClose" data-dismiss="${i}" title="Remove this line" aria-label="Remove this line">×</button>
             </div>
+            ${r.status === 'none' ? `<div class="unavail">This card appears to be unavailable. Please double-check the card name is spelled correctly, as a typo can stop it being found.${
+              r.suggest ? ` Did you mean <button class="suggest" data-suggest="${i}">${esc(r.suggest)}</button>?` : ''}</div>` : ''}
             ${printings ? `<div class="hits">${printings}</div>` : ''}
           </div>`;
       }).join('');
@@ -487,20 +517,28 @@
     // Every line with just one version goes in at once, then the results clear
     $('addAll').addEventListener('click', () => {
       const added = wantRows.filter(r => !r.multi && r.found.length).map(r => addFromWant(r, r.found[0]));
-      renderResults();
+      renderResults(true);
       toastAdded(added);
     });
     // Add on a single want-list result: that card goes in and drops off the results
     $('resList').addEventListener('click', e => {
       const x = e.target.closest('[data-dismiss]');
       if (x) { wantRows.splice(+x.dataset.dismiss, 1); renderResults(); return; }
+      // "Did you mean …?" re-checks that line with the suggested name
+      const sg = e.target.closest('[data-suggest]');
+      if (sg) {
+        const i = +sg.dataset.suggest;
+        wantRows[i] = makeRow(wantRows[i].qty, wantRows[i].suggest);
+        renderResults();
+        return;
+      }
       const b = e.target.closest('[data-want-add]');
       if (!b) return;
       const row = wantRows[+b.closest('.hit').dataset.row];
       const c = row && row.found.find(x => x.id === +b.dataset.wantAdd);
       if (!c) return;
       const added = addFromWant(row, c);
-      renderResults();
+      renderResults(true);
       toastAdded([added]);
     });
     // Add / − / + on the cards and in Your picks
