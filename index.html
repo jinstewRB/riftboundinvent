@@ -40,9 +40,7 @@
   .partial { color:var(--part); font-size:.85rem; font-weight:600; }
   #resSummary .req { color:var(--req); } #resSummary .out { color:var(--out); }
   .res.req { border-left-color:var(--req); } .res.out { border-left-color:var(--out); }
-  .req .tag { background:var(--req); } .out .tag { background:var(--out); }
-  .reqLine { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; justify-content:space-between; }
-  .addBtn.req { border-color:var(--req); color:var(--req); }
+  .req .tag { background:var(--req); } .out .tag { background:var(--out); }  .addBtn.req { border-color:var(--req); color:var(--req); }
   .addBtn.req:hover { background:var(--req); color:#fff; }
   .stepper.req { border-color:var(--req); } .stepper.req button { background:var(--req); color:#fff; }
   .reqHits { margin-top:16px; padding:12px 14px; border:1px dashed var(--req); border-radius:10px; }
@@ -455,6 +453,7 @@
             <div class="resHead">
               <span class="tag">${label}</span>
               <span><strong>${r.qty} ×</strong> ${esc(r.name)}</span>
+              ${r.status === 'req' ? `<button class="addBtn req" data-want-req="${i}">Request${r.qty > 1 ? ` ${r.qty}` : ''}</button>` : ''}
               ${r.status === 'part' ? (r.common
                 ? `<span class="partial">(Only ${r.have} Available)</span>`
                 : `<span class="partial">· only ${r.have} left, so you'd get ${r.have} of ${r.qty}</span>`) : ''}
@@ -462,8 +461,8 @@
               ${r.multi ? '<span class="muted">· pick the version you want</span>' : ''}
               <button class="resClose" data-dismiss="${i}" title="Remove this line" aria-label="Remove this line">×</button>
             </div>
-            ${r.status === 'req' ? `<div class="reqLine"><span class="unavail">I don't list every common, but I very likely have it.</span>
-              <button class="addBtn req" data-want-req="${i}">Request${r.qty > 1 ? ` ${r.qty}` : ''}</button></div>` : ''}            ${r.status === 'none' ? `<div class="unavail">${CAT.size ? 'I couldn\'t find a card by this name' : 'This card appears to be unavailable'}.${
+            ${r.status === 'req' ? '<div class="unavail">I don\'t list every common, but I very likely have it.</div>' : ''}
+            ${r.status === 'none' ? `<div class="unavail">${CAT.size ? 'I couldn\'t find a card by this name' : 'This card appears to be unavailable'}.${
               r.suggest ? ` Did you mean <button class="suggest" data-suggest="${i}">${esc(r.suggest)}</button>?` : ''}</div>` : ''}
             ${printings ? `<div class="hits">${printings}</div>` : ''}
           </div>`;
