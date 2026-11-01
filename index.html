@@ -475,7 +475,7 @@
       $('onlyMine').closest('label').hidden = !wanted || !wanted.size;
       if (!wanted) { onlyMine = false; $('onlyMine').checked = false; }
       const count = s => wantRows.filter(r => r.status === s).length;
-      const quick = wantRows.filter(r => (!r.multi && r.found.length) || r.status === 'req').length, several = wantRows.filter(r => r.multi).length;
+      const asks = count('req'), quick = wantRows.filter(r => !r.multi && r.found.length).length + asks, several = wantRows.filter(r => r.multi).length;
       $('resSummary').innerHTML = [
         count('ok') && `<span class="ok">${count('ok')} available</span>`,
         count('part') && `<span class="part">${count('part')} partly</span>`,
@@ -512,8 +512,11 @@
           </div>`;
       }).join('');
       $('addAll').hidden = !quick;
+      const inStock = quick - asks;
+      const does = inStock && asks ? `Adds the ${inStock} in stock and requests the ${asks} common${asks === 1 ? '' : 's'}.`
+        : asks ? `Requests ${asks === 1 ? 'the common' : `all ${asks} commons`}.` : 'Adds them all to your picks.';
       $('addAllNote').textContent = quick
-        ? (several ? `Adds the ${quick} with only one version; pick versions for the other ${several} above.` : 'Adds them all to your picks.')
+        ? does + (several ? ` Pick a version for the other ${several} above.` : '')
         : several ? 'These have more than one version. Click Add on the version you want.' : '';
       if (!wantRows.length) { $('wantText').value = ''; $('resList').innerHTML = ''; }
       renderGrid();
