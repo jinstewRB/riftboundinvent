@@ -49,7 +49,8 @@
   .reqChips { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px; }
   .reqChip { display:inline-flex; gap:8px; align-items:center; font-size:.9rem; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px 4px 4px 10px; }
   .reqHead { font-size:.95rem; margin:16px 0 2px; color:var(--req); }
-  .reqRow { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .pickRow .reqSlot { grid-area:step; }
+  .reqSet { font-size:.82rem; padding:1px 4px; border-radius:6px; }
   .commonNote { margin-top:8px; }
   .left { color:var(--muted); white-space:nowrap; }
   .hits { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
@@ -237,9 +238,14 @@
     const CAT = new Map(); // normalised name -> { name, common }
     if (D.catalog) {
       for (const n of D.catalog.other) CAT.set(norm(n), { name: n, common: false });
-      for (const n of D.catalog.common) CAT.set(norm(n), { name: n, common: true });
+      // Commons are [name, [[productId, set, number], ...]] (older pages: just the name)
+      for (const e of D.catalog.common) {
+        const [n, printings] = Array.isArray(e) ? e : [e, []];
+        CAT.set(norm(n), { name: n, common: true, printings });
+      }
     }
     const listedBases = new Set(cards.map(c => c.nBase));
+    const shortSet = s => D.setShort[s] || String(s).replace(/^Riftbound\s+/i, '');
 
     // ---------- Want list ----------
     // "3 Jinx, Rebel", "3x Jinx, Rebel" or "Jinx, Rebel x3" (a trailing "| Origins #045/298" is ignored)
@@ -280,13 +286,21 @@
       }
       for (const [id, w] of JSON.parse(localStorage.getItem(PICKS_KEY + ':wants')) || []) if (picks.has(+id)) wants.set(+id, Math.max(w, wants.get(+id) || 0));
     } catch {}
-    // Commons that aren't listed but were asked for anyway: card name -> qty
-    const requests = new Map();
-    try { for (const [n, q] of JSON.parse(localStorage.getItem(PICKS_KEY + ':req')) || []) if (q > 0) requests.set(String(n), +q); } catch {}
+    // Commons that aren't listed but were asked for anyway: card name -> qty, plus which printing
+    // (index into its Common printings; only a choice for the few reprinted in several sets, like Runes)
+    const requests = new Map(), reqPrinting = new Map();
+    try {
+      for (const [n, q, p] of JSON.parse(localStorage.getItem(PICKS_KEY + ':req')) || []) if (q > 0) { requests.set(String(n), +q); if (p) reqPrinting.set(String(n), +p); }
+    } catch {}
+    const printingsOf = name => (CAT.get(stripParens(norm(name))) || {}).printings || [];
+    const printingOf = name => printingsOf(name)[reqPrinting.get(name) || 0] || null; // [productId, set, number]
+    const saveRequests = () => {
+      try { localStorage.setItem(PICKS_KEY + ':req', JSON.stringify([...requests].map(([n, q]) => [n, q, reqPrinting.get(n) || 0]))); } catch {}
+    };
     function setRequest(name, q) {
       q = Math.max(0, Math.min(99, q));
-      q ? requests.set(name, q) : requests.delete(name);
-      try { localStorage.setItem(PICKS_KEY + ':req', JSON.stringify([...requests])); } catch {}
+      q ? requests.set(name, q) : (requests.delete(name), reqPrinting.delete(name));
+      saveRequests();
       refreshPicks();
     }
     const reqCtl = name => {
@@ -341,8 +355,19 @@
       const reqList = requests.size ? `
         <h3 class="reqHead">Commons on request</h3>
         <div class="muted small">Not listed here, but I very likely have them. I'll check and confirm.</div>
-        ${[...requests.keys()].map(n => `
-          <div class="reqRow"><span class="pname"><strong>${esc(n)}</strong></span>${reqSlot(n)}</div>`).join('')}` : '';
+        ${[...requests.keys()].map(n => {
+          const all = printingsOf(n), pr = printingOf(n);
+          const where = all.length > 1
+            ? `<select class="reqSet" data-req-set="${esc(n)}" aria-label="Which set">${all.map((p, i) =>
+                `<option value="${i}"${p === pr ? ' selected' : ''}>${esc(shortSet(p[1]))} #${esc(p[2])}</option>`).join('')}</select>`
+            : pr ? `${esc(shortSet(pr[1]))} #${esc(pr[2])}` : '';
+          return `
+          <div class="pickRow">
+            ${pr ? `<span class="open"><img src="${img(pr[0], 200)}" alt="" onerror="this.style.visibility='hidden'"></span>` : '<span class="open"></span>'}
+            <span class="pname"><strong>${esc(n)}</strong><br><span class="muted small">${where}${where ? ' · ' : ''}on request</span></span>
+            ${reqSlot(n)}
+          </div>`;
+        }).join('')}` : '';
       $('pickList').innerHTML = (list.length ? list.map(({ c, q }) => `
         <div class="pickRow">
           <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" onerror="this.style.visibility='hidden'"></button>
@@ -360,7 +385,10 @@
     // (the Riftbound pricer skips lines ending in ":")
     const listText = () => {
       const lines = [...picks].map(([id, q]) => pickLine(byId.get(id), q));
-      if (requests.size) lines.push(...(lines.length ? [''] : []), 'Commons on request:', ...[...requests].map(([n, q]) => `${q} x ${n}`));
+      if (requests.size) lines.push(...(lines.length ? [''] : []), 'Commons on request:', ...[...requests].map(([n, q]) => {
+        const pr = printingOf(n);
+        return `${q} x ${n}${pr ? ` | ${pr[1]} #${pr[2]}` : ''}`;
+      }));
       return lines.join('\n');
     };
 
@@ -397,7 +425,8 @@
       const known = CAT.get(base);
       let { found, loose } = findCards(name);
       if (loose && known) found = []; // it's a real card that isn't here, so near-misses don't count
-      const have = found.reduce((s, c) => s + c.qty, 0);
+      // They take one version per line, so what counts is the version with the most copies
+      const have = found.reduce((m, c) => Math.max(m, c.qty), 0);
       // common: an unlisted common, or listed commons where any extra can be requested
       const common = !!(known && known.common) && found.every(c => c.rarity === 'Common');
       const reqName = known ? (full !== base ? name.trim() : known.name) : name.trim();
@@ -485,7 +514,7 @@
       $('addAll').hidden = !quick;
       $('addAllNote').textContent = quick
         ? (several ? `Adds the ${quick} with only one version; pick versions for the other ${several} above.` : 'Adds them all to your picks.')
-        : several ? 'These have more than one version. Click Add on the ones you want.' : '';
+        : several ? 'These have more than one version. Click Add on the version you want.' : '';
       if (!wantRows.length) { $('wantText').value = ''; $('resList').innerHTML = ''; }
       renderGrid();
     }
@@ -494,8 +523,9 @@
     // For a common, whatever the listed copies don't cover goes in as a request. Returns lines for the popup.
     function addFromWant(row, c) {
       setPick(c.id, Math.max(picks.get(c.id) || 0, row.qty), row.common ? undefined : row.qty);
-      row.found = row.found.filter(x => x !== c);
-      if (!row.found.length) wantRows = wantRows.filter(r => r !== row);
+      // One version is the choice for that line, so the whole line closes (other versions included)
+      row.found = [];
+      wantRows = wantRows.filter(r => r !== row);
       const added = [{ c, q: picks.get(c.id), want: row.common ? 0 : row.qty }];
       if (row.common) {
         const picked = [...picks].reduce((s, [id, q]) => s + (byId.get(id).nBase === c.nBase ? q : 0), 0);
@@ -688,6 +718,14 @@
       const name = b.closest('.reqSlot').dataset.req;
       setRequest(name, (requests.get(name) || 0) + +b.dataset.reqStep);
     });
+    // Which set, for a requested common printed in several
+    document.addEventListener('change', e => {
+      const s = e.target.closest('[data-req-set]');
+      if (!s) return;
+      reqPrinting.set(s.dataset.reqSet, +s.value);
+      saveRequests();
+      refreshPicks();
+    });
     // Add / − / + on the cards and in Your picks
     document.addEventListener('click', e => {
       const b = e.target.closest('[data-pick]');
@@ -747,7 +785,7 @@
         return;
       }
       delete b.dataset.armed; b.textContent = 'Clear';
-      picks.clear(); wants.clear(); requests.clear();
+      picks.clear(); wants.clear(); requests.clear(); reqPrinting.clear();
       try { for (const k of ['', ':wants', ':req']) localStorage.removeItem(PICKS_KEY + k); } catch {}
       refreshPicks(); renderGrid();
     });
