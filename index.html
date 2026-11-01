@@ -37,6 +37,11 @@
   .res { border:1px solid var(--line); border-left:4px solid var(--none); border-radius:10px; padding:8px 10px; }
   .resGroup { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-top:8px; }
   .resGroup:first-child { margin-top:0; }
+  .resGroup { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:14px; }
+  .grpStamp { display:inline-block; color:var(--none); border:2px solid currentColor; border-radius:4px; padding:3px 9px; font-size:.82rem; letter-spacing:.08em; background:color-mix(in srgb, currentColor 7%, transparent); }
+  .resGroup.ok .grpStamp { color:var(--ok); } .resGroup.part .grpStamp { color:var(--part); }
+  .resGroup.req .grpStamp { color:var(--req); } .resGroup.out .grpStamp { color:var(--out); }
+  .srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
   .grpTools { display:inline-flex; align-items:baseline; gap:6px; margin-left:12px; text-transform:none; letter-spacing:0; }
   .linkBtn { font:inherit; font-size:.85rem; font-weight:600; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .res.ok { border-left-color:var(--ok); } .res.part { border-left-color:var(--part); }
@@ -109,6 +114,9 @@
   .confetti { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:30; }
   .copyNote { margin-top:12px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid var(--accent); font-size:.92rem; }
   .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
+  .flyCard { position:fixed; z-index:40; pointer-events:none; border-radius:6px; box-shadow:0 8px 20px rgba(40,30,10,.28); object-fit:cover; }
+  .flySlip { position:fixed; z-index:40; pointer-events:none; background:#fffbea; border:1px solid #e8dcae; border-top:3px solid var(--req); border-radius:3px; font:600 12px/1 var(--mono); color:var(--req); padding:8px 10px; box-shadow:0 6px 16px rgba(40,30,10,.2); white-space:nowrap; }
+  .flyTag { position:fixed; z-index:41; pointer-events:none; font:700 11px/1 var(--mono); letter-spacing:.04em; text-transform:uppercase; color:#fff; background:var(--req); border-radius:3px; padding:3px 6px; }
   .respell { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
   .respell input { flex:1; min-width:160px; max-width:340px; padding:5px 10px; }
   .respell .btn { padding:5px 14px; }
@@ -584,10 +592,11 @@
           </div>`).join('');
         const group = GROUPS[r.status], newGroup = !i || GROUPS[wantRows[i - 1].status] !== group;
         const outTools = group === 4 ? `<span class="grpTools">Still need these? <button class="linkBtn" data-out="copy">Copy this list</button>/<button class="linkBtn" data-out="save">Save as file</button></span>` : '';
-        return (newGroup ? `<div class="resGroup">${['In stock', 'Partly in stock', 'Commons on request', NONE, 'Out of stock'][group]}${outTools}</div>` : '') + `
+        // One stamped heading per group; each row's status lives in its coloured edge (and a hidden label for screen readers)
+        return (newGroup ? `<div class="resGroup ${r.status}"><span class="grpStamp">${['In stock', 'Partly in stock', 'Commons on request', NONE, 'Out of stock'][group]} · ${count(r.status)}</span>${outTools}</div>` : '') + `
           <div class="res ${r.status}">
             <div class="resHead">
-              <span class="tag">${label}</span>
+              <span class="srOnly">${label}: </span>
               <span><strong>${r.qty} ×</strong> ${esc(r.reqName)}</span>
               ${r.status === 'req' ? `<button class="addBtn req" data-want-req="${i}">Request${r.qty > 1 ? ` ${r.qty}` : ''}</button>` : ''}
               ${r.status === 'part' ? (r.common
@@ -657,7 +666,7 @@
       } else spot.removeAttribute('style');
       spot.appendChild(el);
       requestAnimationFrame(() => el.classList.add('show'));
-      const stay = Math.min(9000, 3500 + 700 * (added.length - 1));
+      const stay = Math.min(4500, 2500 + 250 * (added.length - 1));
       let timer;
       const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 350); };
       const arm = () => { clearTimeout(timer); timer = setTimeout(close, stay); };
@@ -768,6 +777,118 @@
         <div class="lbQty">${c.qty} in stock${c.price != null ? ` · ${money(c.price)} each` : ''}</div>
         <div class="lbPick">${slot(c)}</div>`;
       $('lightbox').hidden = false;
+    }
+
+    // ---------- Cards flying into Your picks ----------
+    // A mini copy of each added card arcs into its own row (into the picks bar on phones).
+    // Requested commons first pop up enlarged with a "Requested" tag so it's clear what was asked for.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const MAX_FLIGHTS = 6, GAP = 110, DUR = 600;
+      const wide = () => innerWidth >= 1000;
+      const idOf = src => (String(src).match(/product\/(\d+)/) || [])[1];
+      const rowKey = row => row.querySelector('[data-open]') ? 'c' + row.querySelector('[data-open]').dataset.open : 'r' + row.querySelector('.pname strong').textContent;
+      const rowQty = row => +((row.querySelector('.stepper span') || {}).textContent || 0);
+      const readPicks = () => new Map([...document.querySelectorAll('#pickList .pickRow')].map(r => [rowKey(r), rowQty(r)]));
+      const sourceImg = el => {
+        if (el.closest('.lbPick')) return $('lbImg');
+        const holder = el.closest('.tile') || el.closest('.hit');
+        return holder ? holder.querySelector('img') : null;
+      };
+      const snap = (el, req) => {
+        const im = req ? null : sourceImg(el);
+        return { req, src: im && (im.currentSrc || im.src), r: (im || el).getBoundingClientRect() };
+      };
+
+      const landingSpot = row => {
+        if (!wide()) {
+          const bar = $('pickOpen');
+          if (!bar.offsetParent) return null;
+          const r = bar.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: 26, bump: bar, scale: 1.08 };
+        }
+        if (row) {
+          row.scrollIntoView({ block: 'nearest' });
+          const im = row.querySelector('img'), r = (im || row).getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: im ? r.width : 30, img: im, bump: row, scale: 1.04 };
+        }
+        const box = document.querySelector('#drawer .drawerBox'), r = box.getBoundingClientRect();
+        return { x: r.left + 40, y: r.top + 50, w: 30, bump: box, scale: 1.025 };
+      };
+
+      const fly = (it, row) => {
+        const pic = it.src || (row && row.querySelector('img') && row.querySelector('img').src);
+        const el = document.createElement(pic ? 'img' : 'div');
+        if (pic) { el.className = 'flyCard'; el.src = pic; } else { el.className = 'flySlip'; el.textContent = 'request'; }
+        const w = pic ? (it.req ? 110 : Math.min(it.r.width, 120)) : 70, h = pic ? w * 7 / 5 : 30;
+        const cx = it.r.left + it.r.width / 2, cy = it.req ? it.r.top - h / 2 - 10 : it.r.top + it.r.height / 2;
+        const x0 = Math.max(8, Math.min(innerWidth - w - 8, cx - w / 2)), y0 = Math.max(8, cy - h / 2);
+        Object.assign(el.style, { left: x0 + 'px', top: y0 + 'px' }, pic ? { width: w + 'px', height: h + 'px' } : {});
+        document.body.appendChild(el);
+        const rowImg = wide() && row && row.querySelector('img');
+        let tag;
+        const go = () => {
+          if (tag) tag.remove();
+          const to = landingSpot(row);
+          if (!to) { if (rowImg) rowImg.style.visibility = ''; return el.remove(); }
+          const dx = to.x - (x0 + w / 2), dy = to.y - (y0 + h / 2), end = to.w / w;
+          const lift = Math.min(140, 60 + Math.abs(dx) * .15);
+          el.animate([
+            { transform: 'translate(0,0) scale(1) rotate(0)' },
+            { transform: `translate(${dx * .5}px,${dy * .5 - lift}px) scale(${(1 + end) / 2}) rotate(-8deg)`, offset: .5 },
+            { transform: `translate(${dx}px,${dy}px) scale(${end}) rotate(0)` }
+          ], { duration: DUR, easing: 'cubic-bezier(.45,0,.35,1)', fill: 'forwards' }).onfinish = () => {
+            if (to.img) to.img.style.visibility = '';
+            el.remove();
+            to.bump.animate([{ transform: 'scale(1)' }, { transform: `scale(${to.scale})` }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+          };
+        };
+        if (it.req && pic) {
+          tag = document.createElement('div');
+          tag.className = 'flyTag'; tag.textContent = 'Requested';
+          Object.assign(tag.style, { left: x0 + 8 + 'px', top: y0 + 8 + 'px' });
+          document.body.appendChild(tag);
+          el.animate([{ transform: 'scale(.4)', opacity: 0 }, { transform: 'scale(1.08)', opacity: 1, offset: .7 }, { transform: 'scale(1)' }], { duration: 260, easing: 'ease-out' });
+          tag.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 120, fill: 'backwards' });
+          setTimeout(go, 650);
+        } else go();
+      };
+
+      // Pair each flight with the row it added to (new, or with a higher quantity than before the click)
+      const launch = ({ items, before }) => {
+        const changed = [...document.querySelectorAll('#pickList .pickRow')].filter(r => !before.has(rowKey(r)) || before.get(rowKey(r)) < rowQty(r));
+        const cardRows = changed.filter(r => r.querySelector('[data-open]'));
+        const reqRows = changed.filter(r => !r.querySelector('[data-open]'));
+        items.slice(0, MAX_FLIGHTS).forEach((it, i) => {
+          const row = it.req ? reqRows.shift() : cardRows.find(r => idOf(r.querySelector('img').src) === idOf(it.src));
+          // Hide the row's picture straight away, so it doesn't show before its card lands
+          const im = wide() && row && row.querySelector('img');
+          if (im) im.style.visibility = 'hidden';
+          setTimeout(() => fly(it, row), i * GAP);
+        });
+      };
+
+      // Aim once Your picks has redrawn: the observer runs before the browser paints the new rows
+      let pending = null;
+      new MutationObserver(() => {
+        if (pending) { const p = pending; pending = null; launch(p); }
+      }).observe($('pickList'), { childList: true });
+
+      // Capture phase, so the card's position is read before the click redraws it
+      document.addEventListener('click', e => {
+        const b = e.target.closest('.addBtn[data-pick="1"], [data-want-add], [data-want-req], .addBtn[data-req-step="1"], #addAll');
+        if (!b || b.disabled) return;
+        let items = [];
+        if (b.id === 'addAll') {
+          for (const row of document.querySelectorAll('#resList .res')) {
+            if (row.classList.contains('req')) { items.push(snap(row.querySelector('[data-want-req]') || row, true)); continue; }
+            const imgs = row.querySelectorAll('.hit img');
+            if ((row.classList.contains('ok') || row.classList.contains('part')) && imgs.length === 1)
+              items.push({ src: imgs[0].currentSrc || imgs[0].src, r: imgs[0].getBoundingClientRect() });
+          }
+        } else items = [snap(b, b.matches('[data-want-req], [data-req-step]'))];
+        pending = { items, before: readPicks() };
+        requestAnimationFrame(() => { if (pending) { const p = pending; pending = null; launch(p); } });
+      }, true);
     }
 
     // ---------- Events ----------
