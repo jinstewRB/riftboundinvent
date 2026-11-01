@@ -94,8 +94,8 @@
   .hit { cursor:default; }
   .howto { padding:12px 16px; font-size:.95rem; }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
-  #addAll { position:relative; overflow:hidden; }
-  #addAll::after { content:''; position:absolute; top:-100%; bottom:-100%; left:-150%; width:28px; pointer-events:none; background:linear-gradient(90deg, transparent, rgba(255,196,40,.6), transparent); transform:rotate(-45deg); animation:sheen 12s ease-in-out 1s infinite; }
+  #addAll { position:relative; overflow:hidden; isolation:isolate; }
+  #addAll::after { content:''; position:absolute; z-index:-1; top:-100%; bottom:-100%; left:-150%; width:28px; pointer-events:none; background:linear-gradient(90deg, transparent, rgba(255,196,40,.3), transparent); transform:rotate(-45deg); animation:sheen 12s ease-in-out 1s infinite; }
   @keyframes sheen { 0% { left:-150%; } 88%, 100% { left:250%; } }
   @media (prefers-reduced-motion: reduce) { #addAll::after { animation:none; display:none; } }
   .confetti { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:30; }
