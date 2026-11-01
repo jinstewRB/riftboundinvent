@@ -109,6 +109,9 @@
   .confetti { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:30; }
   .copyNote { margin-top:12px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid var(--accent); font-size:.92rem; }
   .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
+  .respell { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .respell input { flex:1; min-width:160px; padding:5px 10px; }
+  .respell .btn { padding:5px 14px; }
   .suggest { font:inherit; font-weight:700; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .resClose { margin-left:auto; border:0; background:none; color:var(--muted); font-size:1.2rem; line-height:1; padding:2px 6px; cursor:pointer; }
   .resClose:hover { color:var(--ink); }
@@ -597,6 +600,9 @@
             ${r.status === 'req' ? '<div class="unavail">I don\'t list every common, but I very likely have it.</div>' : ''}
             ${r.status === 'none' ? `<div class="unavail">${CAT.size ? 'I couldn\'t find a card by this name' : 'This card appears to be unavailable'}.${
               r.suggest ? ` Did you mean <button class="suggest" data-suggest="${i}">${esc(r.suggest)}</button>?` : ''}</div>` : ''}
+            ${r.status === 'none' && !r.suggest && CAT.size ? `<form class="respell" data-respell="${i}">
+              <input type="text" value="${esc(r.name)}" aria-label="Fix the spelling of ${esc(r.name)}" autocomplete="off" spellcheck="false">
+              <button class="btn">Check again</button></form>` : ''}
             ${printings ? `<div class="hits">${printings}</div>` : ''}
           </div>`;
       }).join('');
@@ -777,6 +783,24 @@
       toastAdded(added);
     });
     // Add on a single want-list result: that card goes in and drops off the results
+    // Re-checks a wishlist line under a new name (a "Did you mean" pick or a fixed spelling)
+    function renameRow(i, name) {
+      const { qty } = wantRows[i];
+      // Already on the list under that name: add to it instead of showing it twice
+      const same = wantRows.findIndex((r, j) => j !== i && norm(r.name) === norm(name));
+      if (same >= 0) {
+        wantRows[same] = makeRow(wantRows[same].qty + qty, wantRows[same].name);
+        wantRows.splice(i, 1);
+      } else wantRows[i] = makeRow(qty, name);
+      renderResults();
+    }
+    $('resList').addEventListener('submit', e => {
+      const f = e.target.closest('[data-respell]');
+      if (!f) return;
+      e.preventDefault();
+      const name = f.querySelector('input').value.trim();
+      if (name) renameRow(+f.dataset.respell, parseLine(name).name);
+    });
     $('resList').addEventListener('click', e => {
       const x = e.target.closest('[data-dismiss]');
       if (x) { wantRows.splice(+x.dataset.dismiss, 1); renderResults(); return; }
@@ -796,14 +820,7 @@
       // "Did you mean …?" re-checks that line with the suggested name
       const sg = e.target.closest('[data-suggest]');
       if (sg) {
-        const i = +sg.dataset.suggest, { qty, suggest } = wantRows[i];
-        // Already on the list under that name: add to it instead of showing it twice
-        const same = wantRows.findIndex(r => norm(r.name) === norm(suggest));
-        if (same >= 0) {
-          wantRows[same] = makeRow(wantRows[same].qty + qty, wantRows[same].name);
-          wantRows.splice(i, 1);
-        } else wantRows[i] = makeRow(qty, suggest);
-        renderResults();
+        renameRow(+sg.dataset.suggest, wantRows[+sg.dataset.suggest].suggest);
         return;
       }
       const rq = e.target.closest('[data-want-req]');
