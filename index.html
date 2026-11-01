@@ -219,6 +219,7 @@
   .tile:nth-child(3n) .qty{transform:rotate(-3deg)} .tile:nth-child(3n+1) .qty{transform:rotate(2deg)}
   .qty.last{color:var(--stamp)!important;border-color:var(--stamp)}
   .qty{transition:transform .18s ease,background-color .18s ease,color .18s ease}
+  @media (min-width:1000px){ .qty{font-size:.95rem;padding:1px 8px!important;border-width:2px;top:9px;right:9px} }
   @media (hover:hover) and (prefers-reduced-motion:no-preference){ .tile:hover .qty{transform:rotate(0) scale(1.12)!important;background:var(--accent)!important;color:#f4f1ea!important} .tile:hover .qty.last{background:var(--stamp)!important;color:#fff!important} .tile:hover .qty.req{background:var(--req)!important;color:#fff!important} }
   .tag{background:transparent!important;color:var(--ok)!important;border:1.5px solid currentColor;border-radius:3px!important;font-family:var(--mono);display:inline-block}
   .part .tag{color:var(--part)!important} .req .tag{color:var(--req)!important} .out .tag{color:var(--out)!important} .res:not(.ok):not(.part):not(.req):not(.out) .tag{color:var(--none)!important}
