@@ -94,6 +94,10 @@
   .hit { cursor:default; }
   .howto { padding:12px 16px; font-size:.95rem; }
   .btn:disabled { opacity:.45; cursor:not-allowed; }
+  #addAll { position:relative; overflow:hidden; }
+  #addAll::after { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(45deg, transparent 35%, color-mix(in srgb, var(--accent) 28%, transparent) 50%, transparent 65%); transform:translate(-100%,100%); animation:sheen 3.5s ease-in-out 1s infinite; }
+  @keyframes sheen { 0% { transform:translate(-100%,100%); } 30%, 100% { transform:translate(100%,-100%); } }
+  @media (prefers-reduced-motion: reduce) { #addAll::after { animation:none; display:none; } }
   .confetti { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; z-index:30; }
   .copyNote { margin-top:12px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid var(--accent); font-size:.92rem; }
   .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
@@ -174,7 +178,7 @@
 <div class="layout">
 <main>
   <section class="panel howto">
-    <strong>Want some cards?</strong> Check your wishlist for availability in the box below or search for cards individually, then press <strong>Add</strong> on the cards you'd like. They collect in <strong>Your picks</strong><span class="onWide"> on the right</span><span class="onNarrow"> (the button at the bottom)</span>, where you can change them and copy as a list to send to me in discord!
+    <strong>Want some cards?</strong> Check your wishlist for availability in the box below or search for cards individually, then press <strong>Add</strong> on the cards you want (or press <strong>Add All</strong> at the bottom).<br><br>Your cards collect in the <strong>Your Picks</strong> list<span class="onWide"> on the right</span><span class="onNarrow"> (the button at the bottom)</span>, where you can change them and copy as a list to send to me in discord!
     <div class="muted small commonNote">This list covers popular cards and Uncommon and up. Most commons aren't listed, but I very likely have them, so the wishlist check and search let you <strong>request</strong> them.</div>
   </section>
 
@@ -185,7 +189,7 @@
     <div class="row"><button class="btn primary" id="check">Check</button><button class="btn" id="clearWant" hidden>Clear</button><span id="resSummary"></span></div>
     <div id="results" hidden>
       <div id="resList"></div>
-      <div class="row"><button class="btn" id="addAll">Add these to my picks</button><span class="muted small" id="addAllNote"></span></div>
+      <div class="row"><button class="btn" id="addAll">Add All</button><span class="muted small" id="addAllNote"></span></div>
     </div>
   </section>
 
