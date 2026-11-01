@@ -436,8 +436,10 @@
     // unless one still has a "Did you mean …?" to try)
     function renderResults(afterAdd) {
       if (afterAdd && !wantRows.some(r => r.found.length || r.suggest || r.status === 'req')) wantRows = [];
-      // Grouped: in stock, partly, on request, then out of stock / unavailable (list order within each group)
-      const GROUPS = { ok: 0, part: 1, req: 2, out: 3, none: 3 };
+      // Grouped: in stock, partly, on request, check spelling, then out of stock (list order within each group).
+      // With the full card list a name that isn't a card is most likely a typo; without it, it's just unavailable.
+      const GROUPS = { ok: 0, part: 1, req: 2, none: 3, out: 4 };
+      const NONE = CAT.size ? 'Check spelling' : 'Unavailable';
       wantRows.sort((a, b) => GROUPS[a.status] - GROUPS[b.status]);
       wanted = wantRows.length ? new Set(wantRows.flatMap(r => r.found.map(c => c.id))) : null;
       $('results').hidden = $('clearWant').hidden = !wantRows.length;
@@ -449,18 +451,19 @@
         count('ok') && `<span class="ok">${count('ok')} available</span>`,
         count('part') && `<span class="part">${count('part')} partly</span>`,
         count('req') && `<span class="req">${count('req')} on request</span>`,
+        count('none') && `<span class="none">${count('none')} ${CAT.size ? 'to check spelling' : 'unavailable'}</span>`,
         count('out') && `<span class="out">${count('out')} out of stock</span>`,
-        count('none') && `<span class="none">${count('none')} not found</span>`,
       ].filter(Boolean).join(' · ');
       $('resList').innerHTML = wantRows.map((r, i) => {
-        const label = { ok: 'In stock', part: 'Partly available', req: 'Common · on request', out: 'Out of stock', none: 'Unavailable' }[r.status];        const printings = r.found.map(c => `
+        const label = { ok: 'In stock', part: 'Partly available', req: 'Common · on request', out: 'Out of stock', none: NONE }[r.status];
+        const printings = r.found.map(c => `
           <div class="hit" data-row="${i}">
             <button class="open" data-open="${c.id}"><img src="${img(c.id, 200)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>
             <span>${esc(c.name)} <span class="left">(${c.qty} left)</span><br><span class="muted">${esc(c.setShort)}${c.num ? ' #' + esc(c.num) : ''}${c.price != null ? ' · ' + money(c.price) : ''}</span></span>
             <button class="addBtn" data-want-add="${c.id}">Add${Math.min(r.qty, c.qty) > 1 ? ` ${Math.min(r.qty, c.qty)}` : ''}</button>
           </div>`).join('');
         const group = GROUPS[r.status], newGroup = !i || GROUPS[wantRows[i - 1].status] !== group;
-        return (newGroup ? `<div class="resGroup">${['In stock', 'Partly in stock', 'Commons on request', 'Out of stock / unavailable'][group]}</div>` : '') + `
+        return (newGroup ? `<div class="resGroup">${['In stock', 'Partly in stock', 'Commons on request', NONE, 'Out of stock'][group]}</div>` : '') + `
           <div class="res ${r.status}">
             <div class="resHead">
               <span class="tag">${label}</span>
