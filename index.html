@@ -37,7 +37,7 @@
   .res { border:1px solid var(--line); border-left:4px solid var(--none); border-radius:10px; padding:8px 10px; }
   .resGroup { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-top:8px; }
   .resGroup:first-child { margin-top:0; }
-  .grpTools { display:inline-flex; gap:12px; margin-left:12px; text-transform:none; letter-spacing:0; }
+  .grpTools { display:inline-flex; align-items:baseline; gap:6px; margin-left:12px; text-transform:none; letter-spacing:0; }
   .linkBtn { font:inherit; font-size:.85rem; font-weight:600; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .res.ok { border-left-color:var(--ok); } .res.part { border-left-color:var(--part); }
   .resHead { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; }
@@ -215,7 +215,7 @@
   .qty.last{color:var(--stamp)!important;border-color:var(--stamp)}
   .qty{transition:transform .18s ease,background-color .18s ease,color .18s ease}
   @media (hover:hover) and (prefers-reduced-motion:no-preference){ .tile:hover .qty{transform:rotate(0) scale(1.12)!important;background:var(--accent)!important;color:#f4f1ea!important} .tile:hover .qty.last{background:var(--stamp)!important;color:#fff!important} }
-  .tag{background:transparent!important;color:var(--ok)!important;border:1.5px solid currentColor;border-radius:3px!important;font-family:var(--mono);transform:rotate(-2deg);display:inline-block}
+  .tag{background:transparent!important;color:var(--ok)!important;border:1.5px solid currentColor;border-radius:3px!important;font-family:var(--mono);display:inline-block}
   .part .tag{color:var(--part)!important} .req .tag{color:var(--req)!important} .out .tag{color:var(--out)!important} .res:not(.ok):not(.part):not(.req):not(.out) .tag{color:var(--none)!important}
   .res{background:#fff!important}
   .resGroup{font-family:var(--mono)}
@@ -580,7 +580,7 @@
             <button class="addBtn" data-want-add="${c.id}">Add${Math.min(r.qty, c.qty) > 1 ? ` ${Math.min(r.qty, c.qty)}` : ''}</button>
           </div>`).join('');
         const group = GROUPS[r.status], newGroup = !i || GROUPS[wantRows[i - 1].status] !== group;
-        const outTools = group === 4 ? `<span class="grpTools"><button class="linkBtn" data-out="copy">Copy this list</button><button class="linkBtn" data-out="save">Save as file</button></span>` : '';
+        const outTools = group === 4 ? `<span class="grpTools">Still need these? <button class="linkBtn" data-out="copy">Copy this list</button>/<button class="linkBtn" data-out="save">Save as file</button></span>` : '';
         return (newGroup ? `<div class="resGroup">${['In stock', 'Partly in stock', 'Commons on request', NONE, 'Out of stock'][group]}${outTools}</div>` : '') + `
           <div class="res ${r.status}">
             <div class="resHead">
