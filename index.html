@@ -110,7 +110,7 @@
   .copyNote { margin-top:12px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--accent) 16%, transparent); border:1px solid var(--accent); font-size:.92rem; }
   .unavail { margin-top:6px; font-size:.88rem; color:var(--muted); }
   .respell { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-  .respell input { flex:1; min-width:160px; padding:5px 10px; }
+  .respell input { flex:1; min-width:160px; max-width:340px; padding:5px 10px; }
   .respell .btn { padding:5px 14px; }
   .suggest { font:inherit; font-weight:700; color:var(--accent); background:none; border:0; padding:0; text-decoration:underline; cursor:pointer; }
   .resClose { margin-left:auto; border:0; background:none; color:var(--muted); font-size:1.2rem; line-height:1; padding:2px 6px; cursor:pointer; }
@@ -601,8 +601,8 @@
             ${r.status === 'none' ? `<div class="unavail">${CAT.size ? 'I couldn\'t find a card by this name' : 'This card appears to be unavailable'}.${
               r.suggest ? ` Did you mean <button class="suggest" data-suggest="${i}">${esc(r.suggest)}</button>?` : ''}</div>` : ''}
             ${r.status === 'none' && !r.suggest && CAT.size ? `<form class="respell" data-respell="${i}">
-              <input type="text" value="${esc(r.name)}" aria-label="Fix the spelling of ${esc(r.name)}" autocomplete="off" spellcheck="false">
-              <button class="btn">Check again</button></form>` : ''}
+              <input type="text" placeholder="Try another spelling…" aria-label="Search again for ${esc(r.name)}" autocomplete="off" spellcheck="false">
+              <button class="btn">Search again</button></form>` : ''}
             ${printings ? `<div class="hits">${printings}</div>` : ''}
           </div>`;
       }).join('');
